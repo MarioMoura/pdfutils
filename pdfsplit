@@ -1,0 +1,26 @@
+#!/bin/bash
+# Simply split a pdf into odd and even pages
+#
+# v0.1
+
+USAGE="pdfsplit <pdffile>"
+PDF=$1
+MIME=$(xdg-mime query filetype $PDF )
+
+if [ -z "$1" ];
+then
+	echo "$USAGE"
+	exit 1
+fi
+
+if [ "$MIME" != "application/pdf" ];
+then
+	echo "ERROR: $PDF is not a pdf file"
+	exit 1
+fi
+
+N_PAGES=$(pdfinfo $PDF | sed -n 's/Pages:[ ]*\([0-9]*\)/\1/p')
+
+pdfjam $PDF $(seq -s, 1 2 $N_PAGES) -o ${PDF%.pdf}-odd.pdf
+
+pdfjam $PDF $(seq -s, 2 2 $N_PAGES) -o ${PDF%.pdf}-even.pdf
