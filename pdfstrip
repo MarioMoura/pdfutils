@@ -1,0 +1,66 @@
+#!/bin/sh
+# a program that removes a list of pages from a pdf file
+#
+# v0.1
+
+USAGE="USAGE: pdfstrip <pdf-file> <remove-list>
+	example: pdfstrip my-pdf.pdf 3,4,5"
+
+if [ -z "$1" ];
+then
+	echo "ERROR: Missing first argument"
+	echo "$USAGE"
+	exit 1
+fi
+
+if [ -z "$2" ];
+then
+	echo "ERROR: Missing second argument"
+	echo "$USAGE"
+	exit 1
+fi
+
+PDF=$1
+LIST=$2
+MIME=$(xdg-mime query filetype $PDF )
+
+if [ "$MIME" != "application/pdf" ];
+then
+	echo "ERROR: $PDF is not a pdf file"
+	exit 1
+fi
+
+PDF_OUT="${PDF%.pdf}-striped.pdf"
+
+PAGE_NUMBER=$(pdfinfo $PDF | sed -nE 's/Pages:[ ]+([0-9]+)/\1/p')
+
+SEQ=$(seq -s, 1 $PAGE_NUMBER)
+
+ORDER=$(echo "$SEQ" | awk -v remove=$LIST \
+	'BEGIN{
+		FS=",";
+		split(remove,rarr,",");
+	}
+	{
+		split($0,arr,",");
+		for(i in arr){
+			for(x in rarr){
+				if(arr[i] == rarr[x]){
+					delete arr[i]
+				}
+			}
+		}
+	}
+	END{
+		for(i in arr){
+			if(arr[i]){
+				endstr= endstr arr[i] ","
+			}
+		}
+		print endstr
+	}')
+ORDER="${ORDER%,}"
+
+pdfjam $PDF $ORDER -o $PDF_OUT
+
+
