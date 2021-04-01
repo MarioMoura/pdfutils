@@ -2,14 +2,62 @@
 # a program that removes a list of pages from a pdf file
 #
 # v0.1
+# v0.2 Options -h,-v and -o added
 
-USAGE="USAGE: pdfstrip <pdf-file> <remove-list>
+VERSION="0.2"
+
+USAGE="USAGE: $(basename $0) [options] <pdf-file> <remove-list>
+
+	-o <out.pdf>	Define output file. default: <pdffile>-striped.pdf
+	-h		Show this help.
+
 	example: pdfstrip my-pdf.pdf 3,4,5"
+
+while getopts ":hvo:" opt
+do
+	case $opt in
+		h)
+			echo "$USAGE";
+			exit 0
+			;;
+		v)
+			echo "Version: $(basename $0) $VERSION";
+			exit 0
+			;;
+		o)
+			PDF_OUT=$OPTARG
+			;;
+		\?)
+			# Unknown Option
+			echo "ERROR: Unknown opt -$OPTARG"
+			exit 1
+			;;
+		:)
+			# Missing Argument
+			echo "ERROR: Missing argument for opt: -$OPTARG"
+			exit 1;
+			;;
+	esac
+done
+shift $((OPTIND-1))
+
 
 if [ -z "$1" ];
 then
 	echo "ERROR: Missing first argument"
 	echo "$USAGE"
+	exit 1
+fi
+
+if [ ! -e "$1" ];
+then
+	echo "ERROR: File \"$1\" does not exist"
+	exit 1
+fi
+
+if [ ! -r "$1" ];
+then
+	echo "ERROR: File \"$1\" does not have read permissions"
 	exit 1
 fi
 
@@ -30,7 +78,15 @@ then
 	exit 1
 fi
 
-PDF_OUT="${PDF%.pdf}-striped.pdf"
+if [ -n "$(echo "$LIST" | grep -vE "([0-9]+[,]{1}[0-9]+|[,]{1}[0-9]+|[0-9]+)+[^,]*$")" ];
+then
+	echo "ERROR: Expression \"$LIST\" not valid!"
+	exit 1
+fi
+
+PDF_OUT="${PDF_OUT:-${PDF%.pdf}-striped.pdf}"
+
+echo "$PDF_OUT"
 
 PAGE_NUMBER=$(pdfinfo $PDF | sed -nE 's/Pages:[ ]+([0-9]+)/\1/p')
 
@@ -62,5 +118,3 @@ ORDER=$(echo "$SEQ" | awk -v remove=$LIST \
 ORDER="${ORDER%,}"
 
 pdfjam $PDF $ORDER -o $PDF_OUT
-
-
