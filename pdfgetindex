@@ -1,0 +1,57 @@
+#!/bin/sh
+PDF=$1
+#FILE=$(cat bookmarks.txt )
+FILE=$(pdftk $PDF dump_data_utf8 | grep "^Bookmark")
+
+while read line
+do
+	case $line in
+		BookmarkBegin*)
+			page=""
+			title=""
+			;;
+		BookmarkLevel*)
+			level=${line#BookmarkLevel: }
+			[ -n "$page" -a -n "$title" ] && ARRAY+="$page:$title:$level\n"
+			;;
+		BookmarkTitle*)
+			title=${line#BookmarkTitle: }
+			[ -n "$page" -a -n "$level" ] && ARRAY+="$page:$title:$level\n"
+			;;
+		BookmarkPageNumber*)
+			page=${line#BookmarkPageNumber: }
+			[ -n "$title" -a -n "$level" ] && ARRAY+="$page:$title:$level\n"
+			;;
+	esac
+done <<< "$FILE"
+
+ARRAY=$(echo -e "$ARRAY")
+
+
+CHAPTERS=""
+
+while read line
+do
+	level=${line##*:}
+	if [ "$level" -gt 1 ]
+	then
+		if [ $(($prevlevel)) -lt $(($level)) ]
+		then
+			SEARCH_FILE=$(echo "$ARRAY" | sed -n "$((LINE_NUMBER+1))~1p" | sed "/.*:$prevlevel/Q" | wc -l)
+			CHAPTERS="${CHAPTERS}\n$LINE_NUMBER:$SEARCH_FILE"
+		fi
+	fi
+	prevlevel="${line##*:}"
+	LINE_NUMBER=$(($LINE_NUMBER+1))
+done <<< "$ARRAY"
+
+CHAPTERS=$(echo -e "${CHAPTERS#\\n}")
+
+while read line
+do
+	LN=${line%%:*}
+	REC=${line##*:}
+	ARRAY=$(echo "$ARRAY" | sed "${LN}s/^/p:$REC:/")
+done <<< "$CHAPTERS"
+
+echo "$ARRAY"
