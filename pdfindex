@@ -8,7 +8,8 @@ USAGE="pdfindex -f <pdffile> -o <outfile> -r <indexfile>
 		-s <separator>  Change the separators in the index file(\":\" default)
 		-n              Dont strip the bookmarks from the orignal file
 		-h              Show this Help
-		-e				Output an indexfile example"
+		-e		Output an indexfile example
+"
 
 INDEX_FILE="5:Summary
 15:Preface

@@ -1,0 +1,132 @@
+#!/bin/sh
+#
+# Retrieves the indexes of a pdf. The Output is intended to be used
+# with pdfindex
+#
+# v0.1: First version; options -v, -h
+
+VERSION="0.1"
+USAGE="USAGE: pdfgetindex <options> <pdffile>"
+
+
+while getopts ":hv" opt
+do
+	case $opt in
+		h)
+			echo "$USAGE";
+			exit 0
+			;;
+		v)
+			echo "Version: $(basename $0) $VERSION";
+			exit 0
+			;;
+		\?)
+			# Unknown Option
+			echo "EOR: Unknown opt -$OPTARG"
+			exit 1
+			;;
+		:)
+			# Missing Argument
+			echo "ERROR: Missing argument for opt: -$OPTARG"
+			exit 1;
+			;;
+	esac
+done
+shift $((OPTIND-1))
+
+pdftk --help > /dev/null
+
+if [ "$?" -ne "0" ]; then
+	echo "ERROR: pdftk not found"
+	exit 1
+fi
+
+if [ -z "$1" ];
+then
+	echo "ERROR: Missing first argument"
+	echo "$USAGE"
+	exit 1
+fi
+
+if [ ! -e "$1" ];
+then
+	echo "ERROR: File \"$1\" does not exist"
+	exit 1
+fi
+
+if [ ! -r "$1" ];
+then
+	echo "ERROR: File \"$1\" does not have read permissions"
+	exit 1
+fi
+
+PDF=$1
+MIME=$(xdg-mime query filetype "$PDF" )
+
+if [ "$MIME" != "application/pdf" ];
+then
+	echo "ERROR: $PDF is not a pdf file"
+	exit 1
+fi
+
+FILE=$(pdftk "$PDF" dump_data_utf8 | grep "^Bookmark")
+
+if [ -z "$FILE" ]; then
+	echo "ERROR: $PDF has no indexes"
+	exit 0;
+fi
+
+while read line
+do
+	case $line in
+		BookmarkBegin*)
+			page=""
+			title=""
+			;;
+		BookmarkLevel*)
+			level=${line#BookmarkLevel: }
+			[ -n "$page" -a -n "$title" ] && ARRAY+="$page:$title:$level\n"
+			;;
+		BookmarkTitle*)
+			title=${line#BookmarkTitle: }
+			[ -n "$page" -a -n "$level" ] && ARRAY+="$page:$title:$level\n"
+			;;
+		BookmarkPageNumber*)
+			page=${line#BookmarkPageNumber: }
+			[ -n "$title" -a -n "$level" ] && ARRAY+="$page:$title:$level\n"
+			;;
+	esac
+done <<< "$FILE"
+
+ARRAY=$(echo -e "$ARRAY")
+
+
+CHAPTERS=""
+
+while read line
+do
+	level=${line##*:}
+	if [ "$level" -gt 1 ]
+	then
+		if [ $(($prevlevel)) -lt $(($level)) ]
+		then
+			SEARCH_FILE=$(echo "$ARRAY" | sed -n "$((LINE_NUMBER+1))~1p" | sed "/.*:$prevlevel/Q" | wc -l)
+			CHAPTERS="${CHAPTERS}\n$LINE_NUMBER:$SEARCH_FILE"
+		fi
+	fi
+	prevlevel="${line##*:}"
+	LINE_NUMBER=$(($LINE_NUMBER+1))
+done <<< "$ARRAY"
+
+CHAPTERS=$(echo -e "${CHAPTERS#\\n}")
+
+if [ -n "$CHAPTERS" ]; then
+	while read line
+	do
+		LN=${line%%:*}
+		REC=${line##*:}
+		ARRAY=$(echo "$ARRAY" | sed "${LN}s/^/p:$REC:/")
+	done <<< "$CHAPTERS"
+fi
+
+echo "$ARRAY" | sed -E "s/:[0-9]+$//g"
